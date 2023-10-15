@@ -1,160 +1,435 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+#   <--- Импорт необходимых библиотек для работы программы --->
 
-# C extensions
-*.so
+import json, sys, csv, math, colorama, requests
+import pandas as pd
+from colorama import init
+from colorama import Fore, Back, Style
+from geopy.distance import geodesic as GD 
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+init(autoreset=True)
+init()
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+#   <--- Функция нахождения расстояния между двумя точками на карте по координатам в метрах --->
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+def distance(coord1, coord2):
+    return (GD(coord1, coord2).m)
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+#   <--- Второй метод нахождения расстояния между точками на карте по координатам в метрах через функцию --->
 
-# Translations
-*.mo
-*.pot
+def get_distance(coord1, coord2):
+    radius = 6371
+    lat1, lon1 = coord1
+    lat2, lon2 = coord2
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(math.radians(lat1)) \
+        * math.cos(math.radians(lat2)) * math.sin(dlon/2) * math.sin(dlon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    get_distance = radius * c * 1000
+    return get_distance
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+#   <--- Функция получения информации из GEOJSON файла --->
 
-# Flask stuff:
-instance/
-.webassets-cache
+def get_data(name):
+    print(Fore.YELLOW + Style.BRIGHT + "[i] Получение информации из GEOJSON../")
+    with open(name, 'r', encoding='utf-8-sig') as f:
+        data = json.load(f)
+        return data
 
-# Scrapy stuff:
-.scrapy
+#   <--- Функция получения тегов AMENITY всего города --->
 
-# Sphinx documentation
-docs/_build/
+def get_tags(name):
+    print(Fore.YELLOW + Style.BRIGHT + "[i] Начат сбор данных AMENITY тегов../")
+    data = get_data(name)
+    amenityes = []
+    for feature in data['features']:
+        a = feature["properties"]
+        if 'amenity' in a:
+            amenityes.append(a["amenity"])
 
-# PyBuilder
-.pybuilder/
-target/
+#   <--- Вывод на экран тегов на английском языке в алфавитном порядке --->
+    print(Fore.GREEN + Style.BRIGHT + "[v] Сбор данных AMENITY закончен../")
+    print(" ")
+    print(Fore.YELLOW + Style.BRIGHT + "[i] Теги города AMIENTY на английском языке в алфавитном порядке без повторений../")
+    print(" ")
+    print(sorted(list(set(amenityes))))
 
-# Jupyter Notebook
-.ipynb_checkpoints
+#   <--- Функция получения тегов LEISURE всего города --->
 
-# IPython
-profile_default/
-ipython_config.py
+def get_leisures(name):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Начат сбор LEISURE данных../')
+    data = get_data(name)
+    leisures = []
+    for feature in data['features']:
+        a = feature["properties"]
+        if 'leisure' in a:
+            leisures.append(a["leisure"])
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+#   <--- Вывод на экран тегов на английском языке в алфавитном порядке --->
+    print(Fore.GREEN + Style.BRIGHT + '[>] Сбор тегов LEISURE закончен../')
+    print(" ")
+    print(Fore.YELLOW + Style.BRIGHT + "[i] Теги города LEISURE на английском языке в алфавитном порядке без повторений../")
+    print(" ")
+    print(sorted(list(set(leisures))))
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
+#   <--- Функция получения информации об AMENITY тегах, на ввод требует название файла GEOJSON с картой, а также массив с тегами --->
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+def get_amenityes(name, tags):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Начат сбор AMENITY данных../')
+    need_data = []
+    data_list = []
+    data = get_data(name)
+    for feature in data['features']:
+        if 'amenity' in feature["properties"]:
+            need_data.append(feature)
+    for data_elem in need_data:
+        for tag in tags:
+            if tag in data_elem["properties"]['amenity']:
+                if 'name' in data_elem["properties"]:
+                    name = data_elem["properties"]['name']
+                elif 'name' not in data_elem["properties"]:
+                    name = "'Имя не указано'"
+                if 'coordinates' in data_elem["geometry"]:
+                    if data_elem["geometry"]['type'] == 'Point':
+                        coordinates = data_elem["geometry"]["coordinates"]
+                    elif data_elem["geometry"]['type'] == 'LineString':
+                        coordinates = data_elem["geometry"]["coordinates"][0]
+                if 'Столовая' not in name:
+                    data_info = {"tag":tag, "name":name, "coordinates":coordinates}
+                    data_list.append(data_info)
+    print(Fore.GREEN + Style.BRIGHT + '[>] Сбор данных AMENITY закончен../')
+    return data_list
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/#use-with-ide
-.pdm.toml
+#   <--- Функция получения информации об LEISURE тегах, на ввод требует название файла GEOJSON с картой, а также массив с тегами --->
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+def get_elements(name, tags):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Начат сбор данных элементов инфраструктуры города../')
+    need_data = []
+    data_list = []
+    data = get_data(name)
+    for feature in data['features']:
+        if 'leisure' in feature["properties"]:
+            need_data.append(feature)
+    for data_elem in need_data:
+        for tag in tags:
+            if tag in data_elem["properties"]['leisure']:
+                if 'name' in data_elem["properties"]:
+                    name = data_elem["properties"]['name']
+                elif 'name' not in data_elem["properties"]:
+                    name = "'Имя не указано'"
+                if 'coordinates' in data_elem["geometry"]:
+                    if data_elem["geometry"]['type'] == 'Point':
+                        coordinates = data_elem["geometry"]["coordinates"]
+                    elif data_elem["geometry"]['type'] == 'LineString':
+                        coordinates = data_elem["geometry"]["coordinates"][0]
+                if 'Столовая' not in name:
+                    data_info = {"tag":tag, "name":name, "coordinates":coordinates}
+                    data_list.append(data_info)
+    print(Fore.GREEN + Style.BRIGHT + '[v] Массив данных выгружен../')
+    return data_list
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+#   <--- Функция получения информации о магазинах тега SHOP, на ввод требует название файла GEOJSON с картой, а также массив с тегами организации --->
 
-# SageMath parsed files
-*.sage.py
+def get_shops(name, tags):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Сбор данных тега SHOP../')
+    need_data = []
+    data_list = []
+    data = get_data(name)
+    for feature in data['features']:
+        if 'shop' in feature["properties"]:
+            need_data.append(feature)
+    for data_elem in need_data:
+        for tag in tags:
+            if tag in data_elem["properties"]['shop']:
+                if 'name' in data_elem["properties"]:
+                    name = data_elem["properties"]['name']
+                elif 'name' not in data_elem["properties"]:
+                    name = "'Имя не указано'"
+                if 'coordinates' in data_elem["geometry"]:
+                    if data_elem["geometry"]['type'] == 'Point':
+                        coordinates = data_elem["geometry"]["coordinates"]
+                    elif data_elem["geometry"]['type'] == 'LineString':
+                        coordinates = data_elem["geometry"]["coordinates"][0]
+                if 'Столовая' not in name:
+                    data_info = {"tag":tag, "name":name, "coordinates":coordinates}
+                    data_list.append(data_info)
+    print(Fore.GREEN + Style.BRIGHT + '[v] Массив данных выгружен../')
+    return data_list
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+def remove_duplicates(data):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Очистка массивов от лишней информации../')
+    result = []
+    print(Fore.YELLOW + Style.BRIGHT + "[i] Получение расстояния между координатами [METHOD #1]../")
+    for i, item1 in enumerate(data):
+        for j, item2 in enumerate(data[i+1:]):
+            if item1["name"] == item2["name"]:
+                distance_in_meters = distance(item1["coordinates"], item2["coordinates"])
+                if distance_in_meters < 700:
+                    break
+        else:
+            result.append(item1)
+    print(Fore.GREEN + Style.BRIGHT + '[v] Видоизменённый массив данных выгружен../')
+    return result
 
-# Spyder project settings
-.spyderproject
-.spyproject
+#   <--- Функция получения информации фрагмента карты с учебными заведениями, а также положительными и отрицательными организациями --->
 
-# Rope project settings
-.ropeproject
+def get_info(district):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Запущен процесс получения положительных и отрицательных организаций, учебных заведений../')
+    education = get_amenityes(district, ['school', 'university', 'college', 'music_school', 'training', 'language_school', 'kindergarten'])
+    leisures = get_elements(district, ['swiming_pool', 'stadium', 'fitness_centre', 'fitness_station', 'sports_centre', 'sports_hall', 'sports_school', 'track', 'ice_rink', 'amusement_arcade', 'dance', 'dog_park', 'escape_game', 'firepit',  'garden', 'marina', 'nature_reserve', 'park', 'pitch', 'playground', 'sauna'])
+    marketplaces = get_amenityes(district, ['marketplace'])
+    negative_shops = get_shops(district, ['e-cigarette', 'tobaco', 'alcohol', 'wine', 'beverages'])
+    negative_amenityes = get_amenityes(district, ['bar', 'pub', 'fast_food'])
 
-# mkdocs documentation
-/site
+#   <--- Полученные массивы со словарями, содержащими учебные заведения, положительные и отрицательные организации в формате TAG | NAME | COORDINATE --->
+    print(Fore.GREEN + Style.BRIGHT + '[v] Массивы данных с положительными и отрицательными заведениями, а также учебными заведениями предварительно готов../')
+    education_info = education
+    positive_info = (leisures + marketplaces)
+    negative_info = (negative_shops + negative_amenityes)
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+#   <--- Фильтрация полученных массивов на предмет повторений в определённом радиусе --->
 
-# Pyre type checker
-.pyre/
+    filtered_education = remove_duplicates(education_info)
+    count = 1
+    for item in filtered_education:
+        count+=1
+    education_count = len(filtered_education)
 
-# pytype static type analyzer
-.pytype/
+    filtered_positive = remove_duplicates(positive_info)
+    count = 1
+    for item in filtered_positive:
+        count+=1
+    positive_count = len(filtered_positive)
 
-# Cython debug symbols
-cython_debug/
+    filtered_negative = remove_duplicates(negative_info)
+    count = 1
+    for item in filtered_negative:
+        count+=1
+    negative_count = len(filtered_negative)
+    print(Fore.GREEN + Style.BRIGHT + '[v] Фильтрация массивов завершена../')
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+#   <--- Создание массива со словарями, содержащими количество найденных организаций, а также информацию о найденных организациях --->
+
+    institutes = [
+        {'count':[
+
+        {'education_count':education_count},
+        {'positive_count':positive_count},
+        {'negative_count':negative_count}
+
+            ] 
+        },  
+
+        {'info':[
+
+        {'education_info':filtered_education},
+        {'positive_info':filtered_positive},
+        {'negative_info':filtered_negative}
+
+            ]
+        }
+    ]
+    print(Fore.GREEN + Style.BRIGHT + '[v] Массивы данных выгружены../')
+    return institutes
+
+#   <--- Функция определения близкого нахождения отрицательного заведения к образовательным объектам городской инфраструктуры  --->
+
+def check_negative_info(negative_info, schools):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Функция определения отрицательных заведений по окружности активна../')
+    negative_near_education = []
+    print(Fore.YELLOW + Style.BRIGHT + "[i] Получение расстояния между координатами [METHOD #2]../")
+    for school in schools:
+        school_coord = school['coordinates']
+        for neg_info in negative_info:
+            neg_coord = neg_info['coordinates']
+            dist = get_distance(school_coord, neg_coord)
+            if dist <= 100:
+                # print(Fore.RED + Style.BRIGHT + f"[!] Отрицательная организация {neg_info['name']} находится в радиусе 100 метров от учреждения {school['name']}.")
+                negative_near_education.append({
+
+                    'negative_institut_name':neg_info['name'], 
+                    'negative_institut_tag':neg_info['tag'],
+                    'negative_institut_coordinates':neg_info['coordinates'],
+
+                    'education_institut_name':school['name'], 
+                    'education_institut_tag':school['tag'],
+                    'education_institut_coordinates':school['coordinates']
+
+                })
+    print(Fore.GREEN + Style.BRIGHT + '[v] Массив данных выгружен../')
+    return [negative_near_education, len(negative_near_education)]
+
+#   <--- Функция определения близкого нахождения отрицательного заведения к образовательным объектам городской инфраструктуры  --->
+
+def check_negative_near_parks_info(negative_info, parks):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Функция определения отрицательных заведений по окружности активна../')
+    negative_near_parks = []
+    print(Fore.YELLOW + Style.BRIGHT + "[i] Получение расстояния между координатами [METHOD #2]../")
+    for park in parks:
+        park_coord = park['coordinates']
+        for neg_info in negative_info:
+            neg_coord = neg_info['coordinates']
+            dist = get_distance(park_coord, neg_coord)
+            if dist <= 200:
+                # print(Fore.RED + Style.BRIGHT + f"[!] Отрицательная организация {neg_info['name']} находится в радиусе 100 метров от объекта {park['name']}.")
+                negative_near_parks.append({
+
+                    'negative_institut_name':neg_info['name'], 
+                    'negative_institut_tag':neg_info['tag'],
+                    'negative_institut_coordinates':neg_info['coordinates'],
+
+                    'park_locate_name':park['name'], 
+                    'park_locate_tag':park['tag'],
+                    'park_locate_coordinates':park['coordinates']
+
+                })
+    print(Fore.GREEN + Style.BRIGHT + '[v] Массив данных выгружен../')
+    return [negative_near_parks, len(negative_near_parks)]
+
+def get_criteria(p_count, n_count, e_count, near):
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Запущен модуль создания рейтинга по критериям для области../')
+    criterion1 = p_count/n_count
+    criterion2 = near/e_count
+    weight1 = 0.6
+    weight2 = 0.4
+
+    rating = math.ceil((criterion1 * weight1 - criterion2 * weight2)*10)
+    if rating > 10: rating = 10
+    elif rating <= 0: rating = 1
+    print(Fore.GREEN + Style.BRIGHT + '[v] Массив данных выгружен../')
+    return rating
+
+def create_SQL_district(c_name, d_name, e_count, p_count, n_count, count_negative_near_education, positive_split_negative, rating):
+    url = 'http://nkdmb.ru/district_stats.sql'
+    r = requests.get(url)
+
+    with open('main.sql', 'wb') as f:
+        f.write(r.content)
+
+    data = {
+      'city': [c_name],
+      'district': [d_name],
+      'education_count': [e_count],
+      'positive_count': [p_count],
+      'negative_count': [n_count],
+      'count_negative_near_education': [count_negative_near_education],
+      'positive_split_negative': [positive_split_negative],
+      'rating': [rating]
+    }
+
+    df = pd.DataFrame(data)
+    df.to_csv(f"{c_name}_{d_name}.csv", index=False, encoding='utf-8')
+    with open(f"{c_name}_{d_name}.csv", 'r', encoding='utf-8') as file:
+        csv_data = file.read()
+
+    sql_template = 'INSERT INTO district_stats (city, district, education_count, positive_count, negative_count, count_negative_near_education, positive_split_negative, rating) VALUES {};\n'
+    insert_values = ",\n".join(["('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}')".format(row['city'], row['district'], row['education_count'], row['positive_count'], row['negative_count'], row['count_negative_near_education'], row['positive_split_negative'], row['rating']) for _, row in df.iterrows()])
+    sql_data = sql_template.format(insert_values)
+
+    with open(f"{c_name}_{d_name}.sql", 'w') as file:
+        file.write(sql_data)
+        print(Fore.GREEN + Style.BRIGHT + '[v] Программа завершила работу. Файлы "main.sql" и "data.sql" готовы к импорту в базу данных MySQL../')
+
+def create_SQL_city(c_name, d_count, park_near_negative_count, variance):
+    url = 'http://nkdmb.ru/district_stats.sql'
+    r = requests.get(url)
+
+    with open('main.sql', 'wb') as f:
+        f.write(r.content)
+
+    data = {
+      'city': [c_name],
+      'districts_count': [d_count],
+      'park_near_negative_count': [park_near_negative_count],
+      'variance': [variance]
+    }
+
+    df = pd.DataFrame(data)
+    df.to_csv(f"{c_name}.csv", index=False, encoding='utf-8')
+    with open(f"{c_name}.csv", 'r', encoding='utf-8') as file:
+        csv_data = file.read()
+
+    sql_template = 'INSERT INTO cities_stats (city, districts_count, park_near_negative_count, variance) VALUES {};\n'
+    insert_values = ",\n".join(["('{}', '{}', '{}', '{}')".format(row['city'], row['districts_count'], row['park_near_negative_count'], row['variance']) for _, row in df.iterrows()])
+    sql_data = sql_template.format(insert_values)
+
+    with open(f"{c_name}.sql", 'w') as file:
+        file.write(sql_data)
+    print(Fore.GREEN + Style.BRIGHT + '[v] Программа завершила работу. Файлы "main.sql" и "data.sql" готовы к импорту в базу данных MySQL../')
+
+#   <--- Тело программы при запуске приложения, меню выбора настроек --->
+
+print(Fore.CYAN + Style.BRIGHT + "=============================================================================================")
+print(Fore.CYAN + '[i] Ядро анализатора инфраструктуры городов России v0.1 Alpha')
+print('')
+print(Fore.YELLOW + '[i] Программа рассчитывает число объектов положительной и отрицательной инфраструктуры, а также')
+print(Fore.YELLOW + 'нагрузку на общую инфраструктуру района или города. Считает общий рейтинг и наличие отрицательных')
+print(Fore.YELLOW + 'заведений возле учебных учреждения. Присутствует возможность выгрузки в таблицу и SQL формат БД.')
+print('')
+print(Fore.YELLOW + Style.BRIGHT + '[!] Она делится на: Образовательные учреждения, а также положительные и отрицательные объекты')
+print(Fore.CYAN + Style.BRIGHT + "=============================================================================================")
+print('')
+while True:
+    chooseType = input(Fore.CYAN + '[>] Укажите тип сканирования. (1) - город целиком, (2) - муниципалитет (район)../')
+    if str(chooseType) == '1':
+        distr = input(Fore.RED + Style.BRIGHT + '[>] Укажите название файла с JSON разметкой города../')
+        city_name = input(Fore.YELLOW + Style.NORMAL + '[>] Укажите название города, в котором ведётся анализ (только англ. буквы)../')
+        break
+    elif str(chooseType) == '2':
+        distr = input(Fore.RED + Style.BRIGHT + '[>] Укажите название файла с JSON разметкой муниципалитета (района)../')
+        city_name = input(Fore.YELLOW + Style.NORMAL + '[>] Укажите название города, в котором ведётся анализ (только англ. буквы)../')
+        district_name = input(Fore.YELLOW + Style.BRIGHT + '[>] Укажите название района/муниципалитета (только англ. буквы)../')
+        break
+    else:
+        print(Fore.RED + Style.BRIGHT + '[!] Произошла ошибка! Для выбора необходимо ввести только число. Попробуйте ещё раз../')
+print(Fore.YELLOW + Style.BRIGHT + '[i] Начат сбор данных по JSON разметке../')
+
+
+    #   <--- Запуск программы, получение информации по GEOJSON разметке города --->
+
+if chooseType == '1':
+    parks = get_elements(distr, ['beach_resort', 'bathing_place', 'bandstand', 'bird_hide', 'disc_golf_course', 'dog_park', 'firepit', 'fishing', 'fitness_station', 'garden', 'golf_course', 'horse_riding', 'miniature_golf', 'nature_reserve',  'outdoor_seating', ' park', 'picnic_table', 'resort', 'track', ' wildlife_hide'])
+    
+    negative_shops = get_shops(distr, ['e-cigarette', 'tobaco', 'alcohol', 'wine', 'beverages'])
+    negative_amenityes = get_amenityes(distr, ['bar', 'pub', 'fast_food'])
+    
+    negative_info = (negative_shops + negative_amenityes)
+
+    cnnpi = check_negative_near_parks_info(negative_info, parks)
+    create_SQL_city(city_name, '0', cnnpi[1], '0')
+
+
+    #   <--- Запуск программы, получение информации по GEOJSON разметке муниципалитета (района) --->
+
+if chooseType == '2':
+    district_info = get_info(distr)
+
+    #   <--- Функция подсчёта рейтинга для муниципалитета --->
+
+    count_negative_near_education = check_negative_info(district_info[1]["info"][2]["negative_info"], district_info[1]["info"][0]["education_info"])[1]
+
+    #   <--- Функция подсчёта рейтинга для муниципалитета --->
+
+    rating = get_criteria(district_info[0]["count"][1]["positive_count"], district_info[0]["count"][2]["negative_count"], district_info[0]["count"][0]["education_count"], count_negative_near_education)
+
+    print(Fore.CYAN + Style.BRIGHT + "==================================================")
+    print(Fore.YELLOW + '[i] Краткое резюме муниципалитета (района)../')
+    print(Fore.CYAN + Style.BRIGHT + "==================================================")
+    print('')
+    print(Fore.YELLOW + Style.BRIGHT + '[*] Число найденных учебных учреждений../', Fore.CYAN + Style.BRIGHT + f"{district_info[0]['count'][0]['education_count']}")
+    print(Fore.GREEN + Style.BRIGHT + '[+] Число найденных положительных заведений../', Fore.CYAN + Style.BRIGHT + f"{district_info[0]['count'][1]['positive_count']}")
+    print(Fore.RED + Style.BRIGHT + '[+] Число найденных отрицательных заведений../', Fore.CYAN + Style.BRIGHT + f"{district_info[0]['count'][2]['negative_count']}")
+    print('')
+    print(Fore.RED + Style.NORMAL + '[!] Число отрицательных заведений в 100 метрах от уч. заведений../', Fore.CYAN + Style.BRIGHT + f"{count_negative_near_education}")
+    print(Fore.YELLOW + Style.BRIGHT + '[i] Коэффицент положительных заведений к отрицательным../', Fore.CYAN + Style.BRIGHT + f"{int(district_info[0]['count'][1]['positive_count'])/int(district_info[0]['count'][2]['negative_count'])}")
+    print('')
+
+    if rating <= 4: style = Fore.RED
+    elif rating <= 6:   style = Fore.YELLOW
+    elif rating <= 10:  style = Fore.GREEN
+    else: style = Fore.YELLOW
+
+    print(Fore.YELLOW + '[i] Общий рейтинг муниципалитета (района)../', Fore.CYAN + Style.BRIGHT + f"{rating}/10")
+    create_SQL_district(city_name, district_name, district_info[0]['count'][0]['education_count'], district_info[0]['count'][1]['positive_count'], district_info[0]['count'][2]['negative_count'], count_negative_near_education, int(district_info[0]['count'][1]['positive_count'])/int(district_info[0]['count'][2]['negative_count']), rating)
+1.py
+26 кб
